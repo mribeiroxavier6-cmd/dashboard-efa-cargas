@@ -274,26 +274,23 @@
           <div class="fg-item"><label>Data início</label><input type="date" id="fgDataInicio"></div>
           <div class="fg-item"><label>Data fim</label><input type="date" id="fgDataFim"></div>
           <div class="fg-item"><label>UF de destino</label><select id="fgUF"><option value="">Todas</option></select></div>
-          <div class="fg-export">
-            <button class="btn-export" disabled>Exportar PDF<span class="soon">em breve</span></button>
-            <button class="btn-export" disabled>Exportar Excel<span class="soon">em breve</span></button>
-          </div>
+          <div class="fg-export"></div>
         </div>
         <div id="chipsRow"></div>
 
         <h2 class="section-title">KPIs principais <span style="font-weight:400;color:var(--text-muted);font-size:11.5px">(clique num KPI para ver o detalhe)</span></h2>
         <div class="kpi-row" id="kpiRow"></div>
 
-        <h2 class="section-title">Evolucao mensal</h2>
-        <p class="section-note">Apenas CT-e normais. Clique numa barra para filtrar por mes; clique numa bolinha do custo para ver o detalhamento.</p>
+        <h2 class="section-title">Evolução mensal</h2>
+        <p class="section-note">Apenas CT-e normais. Clique numa barra para filtrar por mês; clique numa bolinha do custo para ver o detalhamento.</p>
         <div class="chart-row">
           <div class="chart-card">
-            <h3>Volume de entregas por mes</h3>
+            <h3>Volume de entregas por mês</h3>
             <p class="chart-sub">Quantidade de CT-e normais emitidos</p>
             <div class="chart-wrap" id="chartVolume"></div>
           </div>
           <div class="chart-card">
-            <h3>Custo total por mes</h3>
+            <h3>Custo total por mês</h3>
             <p class="chart-sub">Frete + coleta + entrega + despacho + seguro</p>
             <div class="chart-wrap" id="chartCusto"></div>
           </div>
@@ -1339,7 +1336,7 @@ function fmtDataBR(iso){ const [y,m,d]=iso.split("-"); return `${d}/${m}`; }
 
 function renderChips(){
   const row=document.getElementById("chipsRow"); const chips=[];
-  if(window.FILTROS.mes) chips.push(`<span class="chip">Mes: ${monthLabel(window.FILTROS.mes)}/${window.FILTROS.mes.slice(2,4)} <button data-f="mes">&times;</button></span>`);
+  if(window.FILTROS.mes) chips.push(`<span class="chip">Mês: ${monthLabel(window.FILTROS.mes)}/${window.FILTROS.mes.slice(2,4)} <button data-f="mes">&times;</button></span>`);
   if(window.FILTROS.uf)  chips.push(`<span class="chip">UF: ${window.FILTROS.uf} <button data-f="uf">&times;</button></span>`);
   if(window.FILTROS.cte) chips.push(`<span class="chip">CT-e/nota: ${window.FILTROS.cte} <button data-f="cte">&times;</button></span>`);
   if(window.FILTROS.dataInicio || window.FILTROS.dataFim){
@@ -1406,7 +1403,7 @@ function renderKPIs(){
   const semFiltro=!window.FILTROS.mes&&!window.FILTROS.uf&&!window.FILTROS.dataInicio&&!window.FILTROS.dataFim;
   const kpis=[
     {tipo:"volume",label:"Volume de entregas",value:fmtInt(normais.length),featured:true,
-      sub: semFiltro ? (complementos.length?`+${complementos.length} complementos de valor (fora da conta)`:"CT-e normais no periodo") : "no filtro atual"},
+      sub: ""},
     {tipo:"receita",label:"Receita (frete Ilikia)",value:fmtBRL(receitaFrete),sub:""},
     {tipo:"custo",label:"Custo operacional EFA",value:fmtBRL(custoEFA),sub:"coleta + entrega + despacho + seguro"},
     {tipo:"prazo",label:"% no prazo",value:fmtPct(pct),sub:"",badges:[
@@ -1909,7 +1906,7 @@ function _trendHTML(cur,prev,invert){
   const v=_pctVar(cur,prev); if(v===null)return '<span class="trend flat">—</span>';
   const up=v>=0; const good=invert?!up:up;
   const arrow=up?"&#9650;":"&#9660;";
-  return `<span class="trend ${Math.abs(v)<1?'flat':(good?'up':'down')}">${arrow} ${Math.abs(v).toFixed(1)}% vs mes ant.</span>`;
+  return `<span class="trend ${Math.abs(v)<1?'flat':(good?'up':'down')}">${arrow} ${Math.abs(v).toFixed(1)}% vs mês ant.</span>`;
 }
 function _sparkline(vals,color){
   const W=120,H=30,max=Math.max(...vals,1),min=Math.min(...vals,0),rng=max-min||1;
@@ -1944,7 +1941,7 @@ function renderSubVolume(){
   _norm().forEach(d=>{ modal[d.modal]=(modal[d.modal]||0)+1; local[d.tipoLocal]=(local[d.tipoLocal]||0)+1; });
   const peakM=M.reduce((a,b)=>b.n>a.n?b:a,M[0]||{n:0});
   el.innerHTML=`
-    <h2 class="section-title">Volume — produção movimentada (Ilikia)</h2>
+    <h2 class="section-title">Volume da operação Ilikia</h2>
     <div class="insight-strip">Pico em <b>${peakM.label}</b> com <b>${fmtInt(peakM.n)}</b> entregas. ${
       _pctVar(last.n,prev.n)!==null && _pctVar(last.n,prev.n)<-15
       ? `Sinal de <b>desaceleração</b>: ${last.label} recuou ${Math.abs(_pctVar(last.n,prev.n)).toFixed(0)}% vs ${prev.label}.`
@@ -1995,7 +1992,7 @@ function renderSubSLA(){
   const worst=M.reduce((a,b)=>slaMes(b)<slaMes(a)?b:a,M[0]||{});
   const uf=_ufAgg().filter(u=>u.n>=10).map(u=>({...u,ap:u.atras/u.n*100})).sort((a,b)=>b.ap-a.ap).slice(0,6);
   el.innerHTML=`
-    <h2 class="section-title">SLA — qualidade da entrega (Ilikia)</h2>
+    <h2 class="section-title">SLA da operação Ilikia</h2>
     <div class="insight-strip">Índice geral de <b>${slaGeral.toFixed(1)}%</b> no prazo. Pior mês foi <b>${worst.label}</b> (${slaMes(worst).toFixed(0)}%); a operação ${
       slaMes(last)>=80?`estabilizou acima de 80%`:`ainda opera abaixo da meta`}. Praça de maior risco: <b>${uf[0]?uf[0].uf:'—'}</b> (${uf[0]?uf[0].ap.toFixed(0):0}% de atraso).</div>
     <div class="exec-hero">
@@ -2092,7 +2089,7 @@ function renderSubCusto(){
       stroke-dasharray="${dash} ${C-dash}" stroke-dashoffset="${-acc*C}" transform="rotate(-90 60 60)"/>`;
     acc+=frac; });
   el.innerHTML=`
-    <h2 class="section-title">Custo — investimento logístico (Ilikia)</h2>
+    <h2 class="section-title">Custo da operação Ilikia</h2>
     <div class="insight-strip"><b>Frete concentra ${(comp.frete/compTot*100).toFixed(0)}%</b> do custo total. Custo médio por entrega ${
       _pctVar(lastMed,prevMed)!==null&&_pctVar(lastMed,prevMed)<0?`caiu para`:`está em`} <b>${fmtBRL(lastMed)}</b> no último mês — ${
       medio>lastMed?`abaixo`:`acima`} da média do período (${fmtBRL(medio)}).</div>
@@ -2147,7 +2144,7 @@ function renderSubGeografia(){
   let acc=0,praças=0; for(const u of uf){acc+=u.n;praças++;if(acc>=totN*0.8)break;}
   const top=uf.slice(0,10); const maxN=Math.max(...uf.map(u=>u.n),1);
   el.innerHTML=`
-    <h2 class="section-title">Geografia — alcance e risco (Ilikia)</h2>
+    <h2 class="section-title">Geografia da operação Ilikia</h2>
     <div class="insight-strip"><b>${praças} praças concentram 80%</b> do volume. ${top[0].uf} lidera com <b>${fmtInt(top[0].n)}</b> entregas e ${fmtBRL(top[0].custo)} de custo. Atenção: praças de alto volume com atraso elevado aparecem em vermelho abaixo.</div>
     <div class="exec-hero">
       <div class="exec-kpi"><div class="lab">Estados atendidos</div><div class="val">${uf.length}</div>
