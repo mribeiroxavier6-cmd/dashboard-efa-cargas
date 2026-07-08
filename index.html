@@ -220,6 +220,20 @@
   table.modal-table td{padding:7px 9px;border-top:1px solid var(--gridline);white-space:nowrap;color:var(--text-primary)}
   .modal-filtro-interno{display:flex;gap:10px;margin-bottom:12px}
   .modal-filtro-interno .fg-item input{background:var(--surface-page)}
+  .modal-status-btns{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .stbtn{border:1px solid var(--border);background:var(--surface-1);color:var(--text-secondary);
+    font-size:12px;font-weight:600;padding:6px 13px;border-radius:8px;cursor:pointer;transition:all .12s}
+  .stbtn:hover{border-color:var(--brand-blue)}
+  .stbtn.active{background:var(--brand-blue);color:#fff;border-color:var(--brand-blue)}
+  .stbtn.st-good.active{background:var(--status-good);border-color:var(--status-good)}
+  .stbtn.st-crit.active{background:var(--status-critical);border-color:var(--status-critical)}
+  .stbtn.st-warn.active{background:#c98a00;border-color:#c98a00}
+  .modal-contagem{font-size:12px;color:var(--text-muted);margin-bottom:8px}
+  .modal-contagem b{color:var(--brand-blue-dark);font-size:14px}
+  .sla-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
+  .sla-badge.st-good{background:rgba(12,163,12,.12);color:var(--status-good)}
+  .sla-badge.st-crit{background:rgba(208,59,59,.12);color:var(--status-critical)}
+  .sla-badge.st-warn{background:rgba(250,178,25,.18);color:#8a6100}
 </style>
 </head>
 <body>
@@ -1421,7 +1435,11 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape") fecharModalKPI();
 
 function formatarCampoModal(campo,val){
   if(campo==="pesoReal") return fmtKg(val||0);
-  if(campo==="slaStatus") return val==="no_prazo"?"No prazo":val==="atrasado"?"Atrasado":val==="pendente"?"Pendente":"—";
+  if(campo==="slaStatus"){
+    const map={no_prazo:["No prazo","st-good"],atrasado:["Atrasado","st-crit"],pendente:["Pendente","st-warn"]};
+    const m=map[val]; if(!m) return "—";
+    return `<span class="sla-badge ${m[1]}">${m[0]}</span>`;
+  }
   if(campo==="destinoUF"||campo==="md") return val||"";
   return (val===null||val===undefined)?"":val;
 }
@@ -1466,20 +1484,40 @@ function abrirModalKPI(tipo){
       <div class="modal-filtro-interno">
         <div class="fg-item"><label>Data início</label><input type="date" id="mdIni"></div>
         <div class="fg-item"><label>Data fim</label><input type="date" id="mdFim"></div>
+        <div class="fg-item"><label>Buscar CT-e / nota</label><input type="text" id="mdBusca" placeholder="Nº..."></div>
       </div>
+      <div class="modal-status-btns" id="mdStatusBtns">
+        <button class="stbtn active" data-st="">Todas</button>
+        <button class="stbtn st-good" data-st="no_prazo">No prazo</button>
+        <button class="stbtn st-crit" data-st="atrasado">Atrasado</button>
+        <button class="stbtn st-warn" data-st="pendente">Pendente</button>
+      </div>
+      <div id="mdContagem" class="modal-contagem"></div>
       <div id="mdTabelaWrap"></div>`;
+    let stAtivo="";
     const rerenderTabelaPrazo=()=>{
       const ini=document.getElementById("mdIni").value, fim=document.getElementById("mdFim").value;
+      const q=(document.getElementById("mdBusca").value||"").toLowerCase().trim();
       let regs=base.filter(d=>d.slaStatus);
       if(ini) regs=regs.filter(d=>d.emissao>=ini);
       if(fim) regs=regs.filter(d=>d.emissao<=fim);
+      if(stAtivo) regs=regs.filter(d=>d.slaStatus===stAtivo);
+      if(q) regs=regs.filter(d=>((d.md||"")+"").toLowerCase().includes(q)||((d.nfDoc||"")+"").toLowerCase().includes(q));
+      document.getElementById("mdContagem").innerHTML=`<b>${fmtInt(regs.length)}</b> entrega(s) no filtro`;
       document.getElementById("mdTabelaWrap").innerHTML=tabelaEntregasModal(regs,
-        ["md","emissao","destinoCidade","destinoUF","slaStatus"],
-        {md:"CT-e",emissao:"Data",destinoCidade:"Destino",destinoUF:"UF",slaStatus:"SLA"});
+        ["md","nfDoc","emissao","destinoCidade","destinoUF","slaStatus"],
+        {md:"CT-e",nfDoc:"Nota",emissao:"Data",destinoCidade:"Destino",destinoUF:"UF",slaStatus:"SLA"});
     };
     rerenderTabelaPrazo();
     document.getElementById("mdIni").addEventListener("change", rerenderTabelaPrazo);
     document.getElementById("mdFim").addEventListener("change", rerenderTabelaPrazo);
+    document.getElementById("mdBusca").addEventListener("input", rerenderTabelaPrazo);
+    document.querySelectorAll("#mdStatusBtns .stbtn").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        document.querySelectorAll("#mdStatusBtns .stbtn").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active"); stAtivo=btn.dataset.st; rerenderTabelaPrazo();
+      });
+    });
   } else if(tipo==="peso"){
     title.textContent=`Entregas por peso — ${fmtKg(base.reduce((s,d)=>s+d.pesoReal,0))}`;
     sub.textContent="Ordenado do mais pesado ao mais leve.";
@@ -1943,7 +1981,50 @@ function renderSubSLA(){
         <table class="risk-tbl"><thead><tr><th>UF</th><th>Entregas</th><th>Atraso</th></tr></thead><tbody>
         ${uf.map(u=>`<tr><td class="uf">${u.uf}</td><td>${fmtInt(u.n)}</td><td>${_riskPill(u.ap)}</td></tr>`).join("")}
         </tbody></table></div>
+    </div>
+    <div class="exec-card full" style="margin-top:14px">
+      <h3>Consultar entregas por status</h3>
+      <p class="csub">Filtre para ver quais CT-e / notas estão no prazo, atrasadas ou pendentes</p>
+      <div class="modal-status-btns" id="slaStatusBtns">
+        <button class="stbtn active" data-st="">Todas</button>
+        <button class="stbtn st-good" data-st="no_prazo">No prazo</button>
+        <button class="stbtn st-crit" data-st="atrasado">Atrasado</button>
+        <button class="stbtn st-warn" data-st="pendente">Pendente</button>
+      </div>
+      <div class="modal-filtro-interno" style="margin-bottom:10px">
+        <div class="fg-item"><label>Buscar CT-e / nota</label><input type="text" id="slaBusca" placeholder="Nº do CT-e ou nota..."></div>
+        <div class="fg-item"><label>UF</label><select id="slaUF"><option value="">Todas</option></select></div>
+      </div>
+      <div id="slaContagem" class="modal-contagem"></div>
+      <div class="modal-table-scroll" style="max-height:340px;overflow:auto"><div id="slaTabelaWrap"></div></div>
     </div>`;
+  // ---- filtros interativos de status (aba SLA) ----
+  const _slaBase=_norm().filter(d=>d.slaStatus);
+  const _ufs=[...new Set(_slaBase.map(d=>d.destinoUF).filter(Boolean))].sort();
+  const _selUF=document.getElementById("slaUF");
+  _ufs.forEach(u=>{ const o=document.createElement("option"); o.value=u; o.textContent=u; _selUF.appendChild(o); });
+  let _slaSt="";
+  const _rerenderSLA=()=>{
+    const q=(document.getElementById("slaBusca").value||"").toLowerCase().trim();
+    const uf=document.getElementById("slaUF").value;
+    let regs=_slaBase.slice();
+    if(_slaSt) regs=regs.filter(d=>d.slaStatus===_slaSt);
+    if(uf) regs=regs.filter(d=>d.destinoUF===uf);
+    if(q) regs=regs.filter(d=>((d.md||"")+"").toLowerCase().includes(q)||((d.nfDoc||"")+"").toLowerCase().includes(q));
+    document.getElementById("slaContagem").innerHTML=`<b>${fmtInt(regs.length)}</b> entrega(s) no filtro`;
+    document.getElementById("slaTabelaWrap").innerHTML=tabelaEntregasModal(regs,
+      ["md","nfDoc","emissao","destinoCidade","destinoUF","prevEntrega","dataEntrega","slaStatus"],
+      {md:"CT-e",nfDoc:"Nota",emissao:"Emissão",destinoCidade:"Destino",destinoUF:"UF",prevEntrega:"Prev.",dataEntrega:"Entrega",slaStatus:"SLA"});
+  };
+  _rerenderSLA();
+  document.getElementById("slaBusca").addEventListener("input",_rerenderSLA);
+  document.getElementById("slaUF").addEventListener("change",_rerenderSLA);
+  document.querySelectorAll("#slaStatusBtns .stbtn").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      document.querySelectorAll("#slaStatusBtns .stbtn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active"); _slaSt=btn.dataset.st; _rerenderSLA();
+    });
+  });
   // grafico de linha do SLA (reusa renderLineChart com "custo"=sla)
   renderLineChart("slaMensal",M.map(m=>({...m,label:m.label,custo:slaMes(m),
     frete:0,coleta:0,entrega:0,despacho:0,seguro:0})));
