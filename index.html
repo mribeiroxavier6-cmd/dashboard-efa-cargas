@@ -315,15 +315,13 @@
   body.exportando .map-card{break-inside:avoid;page-break-inside:avoid}
   body.exportando{background:#fff}
   /* contém os SVGs para não esticarem no PDF */
-  body.exportando .chart-wrap{height:170px !important;max-height:170px !important;overflow:hidden}
+  body.exportando .chart-wrap{height:190px !important;max-height:190px !important;overflow:hidden}
   body.exportando .chart-wrap svg,
-  body.exportando .chart-svg{width:100% !important;height:170px !important;max-height:170px !important}
-  /* mapa: precisa caber INTEIRO numa pagina A4 (altura util ~950px na largura de 980) */
+  body.exportando .chart-svg{width:100% !important;height:190px !important;max-height:190px !important}
   body.exportando #mapaBrasil,
-  body.exportando .mapa-wrap{max-height:340px !important;overflow:hidden;margin:0 auto}
+  body.exportando .mapa-wrap{max-height:520px !important;overflow:hidden}
   body.exportando #mapaBrasil svg,
-  body.exportando .mapa-wrap svg{width:auto !important;height:340px !important;max-height:340px !important;display:block;margin:0 auto}
-  body.exportando .map-card{page-break-inside:avoid;break-inside:avoid}
+  body.exportando .mapa-wrap svg{width:100% !important;height:auto !important;max-height:520px !important}
   body.exportando .hbar .htrack{max-width:100%}
   .btn-exportando{opacity:.6;pointer-events:none}
 </style>
@@ -628,19 +626,14 @@ function _dISO(v){
   const s=String(v).trim();
   if(!s) return "";
   const p2=n=>String(n).padStart(2,"0");
-  // 1) ISO: 2026-01-07 (com ou sem hora)
   let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if(m) return `${m[1]}-${p2(m[2])}-${p2(m[3])}`;
-  // 2) dd/mm/aaaa ou d/m/aaaa (Google Sheets exporta sem zero à esquerda)
   m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if(m) return `${m[3]}-${p2(m[2])}-${p2(m[1])}`;
-  // 3) dd/mm/aa (ano com 2 dígitos)
   m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})(?!\d)/);
   if(m) return `20${m[3]}-${p2(m[2])}-${p2(m[1])}`;
-  // 4) dd-mm-aaaa
   m=s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
   if(m) return `${m[3]}-${p2(m[2])}-${p2(m[1])}`;
-  // 5) serial numérico do Excel/Sheets (dias desde 30/12/1899)
   if(/^\d+(\.\d+)?$/.test(s)){
     const n=parseFloat(s);
     if(n>20000 && n<80000){
@@ -729,54 +722,19 @@ function combinarAbas(base, entregas, minutas){
   return out;
 }
 function parseCSVMatrix(text){
-  // parser por índices (evita concatenar caractere a caractere, que trava com arquivos grandes)
-  const rows=[]; let row=[]; const n=text.length;
-  let i=0, ini=0, temAspas=false;
-  while(i<=n){
-    const c = i<n ? text[i] : null;
-    if(temAspas){
-      if(c==='"'){
-        if(text[i+1]==='"'){ i+=2; continue; }
-        temAspas=false; i++; continue;
-      }
-      if(c===null){ break; }
-      i++; continue;
-    }
-    if(c==='"'){ temAspas=true; i++; continue; }
-    if(c===','||c==='\n'||c===null){
-      let campo=text.slice(ini,i);
-      if(campo.charCodeAt(campo.length-1)===13) campo=campo.slice(0,-1); // \r
-      if(campo.length>1 && campo.charCodeAt(0)===34 && campo.charCodeAt(campo.length-1)===34){
-        campo=campo.slice(1,-1).replace(/""/g,'"');
-      }
-      row.push(campo);
-      if(c===','){ i++; ini=i; continue; }
-      // fim de linha ou fim do texto
-      rows.push(row); row=[];
-      if(c===null) break;
-      i++; ini=i; continue;
-    }
-    i++;
-  }
-  // remove última linha vazia gerada por \n final
-  if(rows.length && rows[rows.length-1].length===1 && rows[rows.length-1][0]==="") rows.pop();
+  const rows=[]; let row=[],field="",q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){ if(c=='"'){ if(text[i+1]=='"'){field+='"';i++} else q=false } else field+=c }
+    else { if(c=='"')q=true; else if(c==','){row.push(field);field=""}
+      else if(c=='\r'){} else if(c=='\n'){row.push(field);rows.push(row);row=[];field=""} else field+=c } }
+  if(field.length||row.length){row.push(field);rows.push(row)}
   return rows;
 }
 async function _fetchCSV(url,nome){
-  let r;
-  try{
-    r=await fetch(url);
-  }catch(e){
-    // erro de rede: distingue arquivo local de link/permissão
-    if(location.protocol==="file:"){
-      throw new Error(`ARQUIVO_LOCAL`);
-    }
-    throw new Error(`Não foi possível acessar a aba <b>${nome}</b>. Verifique se a planilha está publicada na web e se o link está correto.`);
-  }
-  if(!r.ok) throw new Error(`A aba <b>${nome}</b> respondeu HTTP ${r.status}. Se for 403 ou 404, a planilha não está publicada ou o link/gid está errado.`);
+  const r=await fetch(url);
+  if(!r.ok) throw new Error(`Falha ao buscar a aba ${nome} (HTTP ${r.status})`);
   const t=await r.text();
-  if(t.trim().startsWith("<")) throw new Error(`A aba <b>${nome}</b> retornou uma página HTML em vez de CSV. O link precisa terminar com <b>output=csv</b> (ou <b>/export?format=csv&gid=</b>).`);
-  if(!t.trim()) throw new Error(`A aba <b>${nome}</b> voltou vazia. Confira se o gid aponta para a aba certa e se ela tem dados.`);
+  if(t.trim().startsWith("<")) throw new Error(`A aba ${nome} retornou HTML. Confira se o link está no formato /export?format=csv&gid=...`);
   return parseCSVMatrix(t);
 }
 async function loadData(){
@@ -800,21 +758,10 @@ async function loadData(){
   }catch(err){
     document.getElementById("loadState").style.display="none";
     const es=document.getElementById("errorState"); es.style.display="block";
-    if(err.message==="ARQUIVO_LOCAL"){
-      es.innerHTML=
-        "<b>O dashboard precisa de um servidor para ler o Google Sheets.</b>"+
-        "<br><br>Você abriu este arquivo direto do computador (endereço começando com <b>file:///</b>). "+
-        "Nesse modo o navegador bloqueia o acesso a sites externos por segurança, então os dados do Google não carregam."+
-        "<br><br><b>Como resolver:</b><br>"+
-        "&bull; No VS Code: clique com o botão direito no index.html &rarr; <b>Open with Live Server</b><br>"+
-        "&bull; Ou publique no Vercel/GitHub Pages e acesse pelo link<br>"+
-        "&bull; O endereço precisa começar com <b>http://</b> ou <b>https://</b>, não com file:///";
-    } else {
-      es.innerHTML="<b>Não foi possível carregar os dados.</b><br><br>"+err.message+
-        "<br><br>Confira os 3 links em <b>window.FONTE</b> no topo do script. "+
-        "A planilha precisa estar publicada em <b>Arquivo &rarr; Compartilhar &rarr; Publicar na web</b>, "+
-        "com cada aba publicada no formato CSV.";
-    }
+    es.innerHTML="<b>Nao foi possivel carregar os dados.</b><br>"+err.message+
+      "<br><br>Se estiver usando o Google Sheets, confira os 3 links em <b>window.FONTE</b> no topo do script. "+
+      "Se estiver usando o CSV local, verifique que <b>dados_dashboard.csv</b> esta na MESMA pasta deste index.html "+
+      "e abra pelo Live Server.";
   }
 }
 
@@ -1511,7 +1458,7 @@ async function exportarPDF(){
   // agrupa cabeçalho + painel num container temporário
   const wrap=document.createElement("div");
   const LARGURA_PDF=980; // largura fixa de renderização (proporção A4)
-  wrap.style.cssText=`background:#fff;padding:16px 18px;width:${LARGURA_PDF}px;max-width:${LARGURA_PDF}px;box-sizing:border-box;margin:0 auto`;
+  wrap.style.cssText=`background:#fff;padding:16px 18px;width:${LARGURA_PDF}px;max-width:${LARGURA_PDF}px;box-sizing:border-box;position:absolute;left:-10000px;top:0`;
   const cab=document.getElementById("pdfCabecalho");
   const marcadorCab=document.createComment("cab"); cab.parentNode.insertBefore(marcadorCab,cab);
   const marcadorPan=document.createComment("pan"); painel.parentNode.insertBefore(marcadorPan,painel);
@@ -1540,7 +1487,7 @@ async function exportarPDF(){
       filename:nomeArq,
       image:{type:"jpeg",quality:0.96},
       html2canvas:{scale:2,useCORS:true,backgroundColor:"#ffffff",scrollX:0,scrollY:0,
-                   windowWidth:LARGURA_PDF+80},
+                   width:LARGURA_PDF,windowWidth:LARGURA_PDF},
       jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
       pagebreak:{mode:["css","legacy"]}
     }).from(wrap).toPdf().get("pdf").then(pdf=>{
