@@ -626,14 +626,28 @@ function _dISO(v){
   const s=String(v).trim();
   if(!s) return "";
   const p2=n=>String(n).padStart(2,"0");
+  // 1) ISO: 2026-01-07
   let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if(m) return `${m[1]}-${p2(m[2])}-${p2(m[3])}`;
+  // 2) O Google Sheets publica em MÊS/DIA/ANO (formato americano): 1/5/2026 = 5 de janeiro
   m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if(m) return `${m[3]}-${p2(m[2])}-${p2(m[1])}`;
+  if(m){
+    let mes=parseInt(m[1],10), dia=parseInt(m[2],10);
+    // se o primeiro número não pode ser mês (>12), então a planilha veio em dia/mês
+    if(mes>12){ const t=mes; mes=dia; dia=t; }
+    return `${m[3]}-${p2(mes)}-${p2(dia)}`;
+  }
+  // 3) mm/dd/aa
   m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})(?!\d)/);
-  if(m) return `20${m[3]}-${p2(m[2])}-${p2(m[1])}`;
+  if(m){
+    let mes=parseInt(m[1],10), dia=parseInt(m[2],10);
+    if(mes>12){ const t=mes; mes=dia; dia=t; }
+    return `20${m[3]}-${p2(mes)}-${p2(dia)}`;
+  }
+  // 4) dd-mm-aaaa
   m=s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
   if(m) return `${m[3]}-${p2(m[2])}-${p2(m[1])}`;
+  // 5) serial numérico
   if(/^\d+(\.\d+)?$/.test(s)){
     const n=parseFloat(s);
     if(n>20000 && n<80000){
